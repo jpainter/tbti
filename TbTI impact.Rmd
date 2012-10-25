@@ -1,0 +1,43 @@
+Title
+========================================================
+
+Get upto date data dna (and no FB TB cases manually entered), via one excel file, FBTB.xlsx with 5 sheets
+- FB-TB
+- PanelTreat
+- B1Pul
+- CulturePos
+- SmearPos
+
+```{r }
+# Load the XLConnect package
+require(XLConnect)
+
+# Load spreadsheet
+wb <- loadWorkbook("FBTB.xlsx")
+fbtb <- readWorksheet(wb, sheet = "FB-TB", startRow=1, startCol=1, header = TRUE)
+paneltreat <- readWorksheet(wb, sheet = "PanelTreat", startRow=2, startCol=1, header = TRUE)
+b1pul <- readWorksheet(wb, sheet = "B1Pul", startRow=2, startCol=1, header = TRUE)
+culturepos <- readWorksheet(wb, sheet = "CulturePos", startRow=2, startCol=1, header = TRUE)
+smearpos <- readWorksheet(wb, sheet = "SmearPos", startRow=2, startCol=1, header = TRUE)
+```
+
+Use function to re-shape the data from DNA.
+- remove totals from column and rows
+- shorten year labels from 'clendar year xxxx' to 'xxxx'
+```{r CleanUp}
+source("CleanUpDNA.R")
+paneltreat <- CleanUpDNA(paneltreat)
+b1pul <- CleanUpDNA(b1pul)
+culturepos <- CleanUpDNA(culturepos)
+smearpos <- CleanUpDNA(smearpos)
+```
+
+
+
+You can also embed plots, for example:
+
+```{r fig.width=7, fig.height=6}
+plot(cars)
+```
+
+**in italics**
