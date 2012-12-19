@@ -1,0 +1,346 @@
+\documentclass{article}
+
+\usepackage{parskip} % no paragraph indent, with space in between
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace} %for Hmisc::describe
+\usepackage{relsize}  %for Hmisc::describe
+\usepackage[section]{placeins}  %% keeps output from floating into adjoining sections
+\usepackage{float} % prevent float...
+\usepackage{fixltx2e}
+\usepackage{booktabs} % for table formatting
+\usepackage{rotating} % for landscape tables
+\usepackage{adjustbox} % for shrinking table
+
+<<'setup', echo=FALSE , message=FALSE, cache=FALSE>>=
+opts_chunk$set( echo=TRUE,  cache=FALSE , tidy=TRUE, 
+                fig.align='center', fig.show='hold', fig.width=6, fig.height=6,
+                fig.path='images/', fig.align='center',
+                message=FALSE, comment="", tidy=TRUE, results='asis')
+options(replace.assign=TRUE, width=60)  # width is size of box for code.  The tidy=TRUE option fits code into this size.
+if (!exists('.title')) .title = 'Immigrant, Refugee, and Migrant Health Branch'
+if (!exists('.author')) .author = Sys.info()['user']
+@
+
+<<'title', echo=FALSE, results=hide, message=FALSE, cache=FALSE>>=
+.title= 'Impact of Revised, "Culture and DOT", TB Technical Instructions'
+.author = 'Epidemiology Team of the Immigrant, Refugee, and Migrant Health Branch'
+@
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+\title{\Sexpr{.title}}
+\author{\Sexpr{.author}%
+\thanks{Epidemiology Team: John Painter (Lead), Kendra Cuffe, Stacie Dunkle (EISO), Sasi Jonnalagadda, Yecai Liu, Rossanne Philen, Zanju Wang, Meghan Weems; EDN developers: Yoni Haber (Lead), Wei-Lun Juang, Charles Miller, Daniel Wenger; and EDN data entry center: Nekiea Gray (Lead)%
+}}
+
+\maketitle
+\tableofcontents  % inserts 'Table of contents' 
+
+\section{Background}
+Begining in 2007, CDC began to implement revised TB technical instructions (TI) to require mycobacterial culture and, when positive, completion of TB therapy before admission into the United States.  These changes, referred to as the "culture and DOT" TIs (or alternatively, the "2007 TB TI"), were initially implemented in few key countries.  They will be required of all countries by October 2013.  
+
+As the number of countries implementing the revised technical instructions has increased, an increasing number of cases have been diagnosed and treated overseas. To evaluate the potential impact of this change on TB in the United States, We trid to measure the number of cases identified as a result of the revised TB TI, and compared that number with the number of foreign-born TB cases in the United States.  
+
+Documentation of immigrant/refugee applicants with TB has been challenging.  Prior to 2007, the immigrant/refugee applicant medical exam forms indicated if an applicant was ever treated for TB, but did not clearly indicate if the diagnosis and treatment were as a result of the required applicant examination.  Examinations under the revised are accompanied with a revised form that more clearly indicates treatement for TB, and when treated, if the applicant was initially smear positive or culture positive. However, in part due to the numerous panel physicians who complete these forms, there are some inconsistencies with the documentation, which is described in the section, "Overseas TB Diagnosis and Treatment."   
+
+Below, we provide the description, the code (R statistical software, in shaded box), and the results.
+
+\section{Data}
+Data from overseas medical examinations are reported to the Electronic Disease Notification system (EDN) after arrival in the United States and then aggregate through the Disease Notification Analysis (DNA) system.  A spreadsheet, FBTB.xlsx, is linked to DNA and provides yearly totals for TB classes.  In addition, the reported number of foreign-born cases was obtained from DTBE and included on the worksheet, 'FBTB.'  [Prior to running this script, the .xlsx file should be \emph{openned and saved} so that the link with DNA is refreshed; this will update the sheet with the most recent data available.]
+
+<<'load', warning=FALSE>>=
+# Load the XLConnect package
+require(XLConnect)
+
+# Load spreadsheet
+wb <- loadWorkbook("FBTB.xlsx")
+
+# load DNA Worksheets
+SmearPos <- readWorksheet(wb, sheet = "SmearPos", startRow=2, startCol=1, header = TRUE) 
+CulturePos <- readWorksheet(wb, sheet = "CulturePos", startRow=2, startCol=1, header = TRUE)
+B1Pul <- readWorksheet(wb, sheet = "B1Pul", startRow=2, startCol=1, header = TRUE)
+PanelTreat1991 <- readWorksheet(wb, sheet = "PanelTreat1991", startRow=2, startCol=1, header = TRUE)
+PanelTreat2007 <- readWorksheet(wb, sheet = "PanelTreat2007", startRow=2, startCol=1, header = TRUE)
+PanelDiagnosed <- readWorksheet(wb, sheet = "PanelDiagnosed", startRow=2, startCol=1, header = TRUE)
+SmearPosCultureNeg <- readWorksheet(wb, sheet = "SmearPosCultureNeg", startRow=2, startCol=1, header = TRUE)
+SmearNegCulturePos <- readWorksheet(wb, sheet = "SmearNegCulturePos", startRow=2, startCol=1, header = TRUE)
+TotalPanelRx <- readWorksheet(wb, sheet = "TotalPanelRx", startRow=2, startCol=1, header = TRUE)
+
+# load workdsheet with DTBE surveillance data (manually entered from online sources)
+FBTB <- readWorksheet(wb, sheet = "FBTB", startRow=1, startCol=1, header = TRUE)
+
+# Re-label years...e.g. convert "Reporting Year 2007" to "2007"
+SmearPos$Year = sapply(strsplit(SmearPos$Year,' '),"[[",3)  # strsplit() function identifies the 3rd word.
+CulturePos$Year = sapply(strsplit(CulturePos$Year,' '),"[[",3)
+B1Pul$Year = sapply(strsplit(B1Pul$Year,' '),"[[",3)
+PanelTreat1991$Year = sapply(strsplit(PanelTreat1991$Year,' '),"[[",3)
+PanelTreat2007$Year = sapply(strsplit(PanelTreat2007$Year,' '),"[[",3)
+PanelDiagnosed$Year = sapply(strsplit(PanelDiagnosed$Year,' '),"[[",3)
+SmearPosCultureNeg$Year = sapply(strsplit(SmearPosCultureNeg$Year,' '),"[[",3)
+SmearNegCulturePos$Year = sapply(strsplit(SmearNegCulturePos$Year,' '),"[[",3)
+TotalPanelRx$Year = sapply(strsplit(TotalPanelRx$Year,' '),"[[",3)
+
+# combine data
+rm(data) # if 'data' object exist, clear and start over 
+data = merge(SmearPos, CulturePos) 
+data = merge(data, B1Pul, all.x = TRUE) 
+data = merge(data, PanelTreat1991, all.x = TRUE) 
+data = merge(data, PanelTreat2007, all.x = TRUE)
+data = merge(data, PanelDiagnosed, all.x = TRUE) 
+data = merge(data, SmearPosCultureNeg, all.x = TRUE) 
+data = merge(data, SmearNegCulturePos, all.x = TRUE) 
+data = merge(data, TotalPanelRx, all.x = TRUE)
+data = merge(data, FBTB, all.x = TRUE) 
+
+# convert year to numeric
+data$Year = as.numeric(data$Year)
+@
+
+
+\section{Foreign-Born TB}
+
+The foreign-born TB rates were recorded from data available online.   That data was then combined with the data from DNA into one table.  
+
+<<'fbtb', warning=FALSE>>=
+
+# IF FBTB data not available for current year, predict from trend over previous 5 years
+### not necessary--comment out
+# trend = glm(Foreign.born.TB ~ Year, data = FBTB[FBTB$Year>2005,]) # ?limit to [FBTB$Year>2006,] 
+# predict = c(2012, predict(trend, 2012, newdata=data.frame(Year=2012), type = "response")$fit )
+# FBTB = rbind(FBTB, predict)
+
+@
+
+
+We plot the number of foreign-born TB cases in the United States.
+
+<<'fb-plot', fig.cap="FB TB Cases" , warning=FALSE>>=
+# plots
+library(ggplot2)
+
+chart_title = "FB TB Cases" 
+
+ggplot(data=data, aes(y=Foreign.born.TB, x=as.numeric(Year) ))  + 
+     geom_point(size=4) + 
+     geom_line( size=1) +
+     xlab("Year") +
+     ylab("TB Cases") +
+     theme_bw() +
+     ggtitle(chart_title) +
+     scale_x_continuous(limits=c(2002,2013), breaks=seq(1,2020,1)) +
+#      scale_y_continuous(breaks=seq(-500,1500,250)) +
+     theme(legend.justification=c(0,0), legend.position=c(0.25,0.66)
+     )
+# ggsave("FBcases.png", width=6, height=6, dpi=300)
+
+@
+
+We calculated the change in foreign-born cases from a baseline of the five-year period 2002-2006.
+
+<<'dirt'>>=
+# define decline in RVCT cases
+baselineFBTB = mean(FBTB$Foreign.born.TB[FBTB$Year %in% c(2002,2003,2004,2005,2006)]) #  Baseline FB cases, 2002-2006
+data$dirt=baselineFBTB-data$Foreign.born.TB
+
+# print DTBE data 
+library(xtable)
+print(xtable( data[which(data$Foreign.born.TB>0),c("Foreign.born.TB", "dirt")], digits=0), include.rownames=FALSE, 
+      caption="Decline in Foreign-Born TB relative to baseline of mean number during 2002-2006",
+      caption.placement = "top")
+@
+
+We then plot this relative change in foreign-born cases.  The plot looks like an upside-down version of the plot above.
+
+<<'fb-inverted-plot', fig.cap="Decline in FB TB Cases", warning=FALSE >>=
+
+chart_title = "Increasing Decline in FB TB Cases" 
+
+ggplot(data=data, aes(y=dirt, x=as.numeric(Year) ))  + 
+     geom_point(size=4) + 
+     geom_line( size=1) +
+     xlab("Year") +
+     ylab("Decline in TB Cases") +
+     theme_bw() +
+     ggtitle(chart_title) +
+     scale_x_continuous(limits=c(2002,2013), breaks=seq(1,2020,1)) +
+#      scale_y_continuous(breaks=seq(-500,1500,250)) +
+     theme(legend.justification=c(0,0), legend.position=c(0.25,0.66)
+     )
+
+# ggsave("FBcases.png", width=6, height=6, dpi=300)
+
+@
+
+
+
+\section{Overseas TB Diagnosed by Panel Physicians}
+
+We reveiwed the data reported to get the number of TB cases among immigrant/refugees applicants that was diagnosed by panel physicians and treated overseas. Data on TB cases treated overseas was unavailable until implementation of the revised TB TI. When available, the data reported indicates if the applicant was treated     
+
+We could define the total number treated by the revised TB TI as the number of records marked as “Class B1 Pul Treat By Panel”, which are labeled here (for brevity) as "PanelTreat2007".  However, there appear to be records with individuals who were smear positive or culture positive that were also treated (perhaps by non panel physician).  To estimate the total number of TB cases diagnosed by the panels, we summed the:
+\begin{itemize}
+\item{Smear positive plus,}
+\item{smear-negative/culture-positive plus,}
+\item{the number smear-negative and culture-negative cases that were diagnosed and treated by the panels.}
+\end{itemize}
+This number labeled  "TotalPanelRx" is slightly larger than the one for “PanelTreat2007”.  An advantage of TotalPanelRx is that it captures not only those with microbiologically confirmed TB, but also those with readigroaphic and clinical evidence of Tb that, due to increased emphasis on diagnosing and treating TB cases in the revised TB TI, may not have been treated under the original TB TI.  Even if they would have been treated under the original TB TI, they would not have been treated to completion and therefore could have re-developed active TB while in the United States.  
+
+<<'print-table'>>=
+# add totals
+totals= colSums(data)  # calculates totals (note: also calculates sum(Year), which is not needed)
+totals[1] = "Total" # replace sum(Year) with 'Total'
+df = rbind(data, totals) # add totals row to data frame
+
+# Print data table
+library(xtable)
+xt1 = xtable(df[,c(1:7)], 
+             caption = "Foreign-Born TB and TB Treatment Reported 
+             for Immigrant and Refugee Applicants", digits=0)
+xt2 = xtable(df[,c(1, 8:14)], 
+             caption = "Foreign-Born TB and TB Treatment Reported 
+             for Immigrant and Refugee Applicants, contued", digits=0)
+print(xt1, floating.environment='sidewaystable', caption.placement='top', size="\\small", include.rownames=FALSE)
+print(xt2, floating.environment='sidewaystable', caption.placement='top', size="\\small", include.rownames=FALSE)
+
+@
+
+
+\section{Potential Impact of Revised TB  TI}
+
+According to arrival data since 2007, the total number of TB cases identified and treated overseas was \Sexpr{sum(data$PanelTreat1991) + sum(data$TotalPanelRx)}, of which \Sexpr{sum(data$TotalPanelRx)} were using the revised, "culture and DOT," TB TI, and \Sexpr{sum(data$PanelTreat1991)} were using the original TB TI.  
+
+Among  arrival data in 2012, the annual number of TB cases identified and treated overseas was \Sexpr{data$PanelTreat1991[data$Year==2012] + data$TotalPanelRx[data$Year==2012]}, of which \Sexpr{data$TotalPanelRx[data$Year==2012]} were using the revised, "culture and DOT," TB TI, and \Sexpr{sum(data$PanelTreat1991[data$Year==2012])} were using the original TB TI. 
+
+The number of cases diagnosed and treated overseas has been incrreasing.  To assess the number of additional TB cases diagnosed and treated as a result of the revised TB TI, we suggest that the most likely value is the TotalPanelRx minus the number smear positive.  We provide a range by considering that, at a minimum, all of the Smear-Negative / Culture-Positive cases are attributed to the revised TB TI and, at a maximum, there can be no more than the TotalPanelRx. For the most recent year, the most likely number is \Sexpr{data$TotalPanelRx[data$Year==2012]-data$SmearPos[data$Year==2012]}, with a range of \Sexpr{data$SmearNegCulturePos[data$Year==2012]} to \Sexpr{data$TotalPanelRx[data$Year==2012]}.
+
+<<'comparison', fig.cap="Annual Number of TB Cases Prevented through Overseas TB Screening and \nDecline in Number of Foreign-Born TB Cases ", warning=FALSE>>=
+
+chart_title = "Annual Number of TB Cases 
+\nPrevented through Revised Overseas TB Screening"
+
+# Shift year of panel treat to previous year -- the year they would have arrived
+i = 2:(length(data$Year))
+data$TBTI_ul = rep(0, length(data$Year))
+data$TBTI_ll = rep(0, length(data$Year))
+data$TBTI = rep(0, length(data$Year))
+data[i-1,]$TBTI = data[i,]$TotalPanelRx - data[i,]$SmearPos
+data[i-1,]$TBTI_ll = data[i,]$SmearNegCulturePos
+data[i-1,]$TBTI_ul = data[i,]$TotalPanelRx
+
+
+# reshape data to have only one measure (TB) with many groups (TBTI, dirt, etc.) so that it easier to chart.
+require(reshape)
+data.melt=  melt(data, id.vars=c("Year") , 
+                 measure.vars=c("TBTI", "TBTI_ll", "TBTI_ul", "dirt"), 
+                 na.rm=TRUE, 
+                 variable_name="TB")
+
+# label TB groups
+TBTI_categories = c("All TB treated cases less the smear positive TB cases", 
+                    "Culture pos, smear negative TB cases",
+                    "All TB cases treated by Panel Physicians",
+                    "Decline in Foreign-born TB")
+levels(data.melt$TB) = TBTI_categories
+
+# change value to match production server, annualized from 3 quarters of year
+#data.melt[data.melt$Year==2011 & data.melt$TB=="Overseas TB Treatment","value"] = 1012-300 #subtract estimated smear pos
+# data.melt= rbind(data.melt, data.frame(Year = 2007, TB="Overseas TB Treatment", value = 0))
+
+# remove data for tbti cases prior to 2006.
+data.melt[data.melt$Year<2006 & grepl("Overseas", data.melt$TB), "Year"] = NA
+
+ggplot(data=data.melt[!data.melt$TB=="Decline in Foreign-born TB",], aes(y=value, x=Year, group=TB)) + 
+     geom_point(aes(color=TB), size=4) + 
+     geom_line(aes(color=TB), size=1) +
+     scale_color_manual( 
+          breaks=TBTI_categories ,
+          values=c("blue", "light blue", "dark blue","black"), 
+          name="TB Cases Prevented"
+          ) +
+     ylab("TB Cases") +
+     theme_bw() +
+     ggtitle(chart_title) +
+     scale_x_continuous(limits=c(2002,2011), breaks=seq(1,2020,1)) +
+     scale_y_continuous(breaks=seq(-500,1500,250)) +
+     theme(legend.justification=c(0,0), legend.position=c(0.05,0.65), 
+           legend.text = element_text(face="bold", colour="black", size=8)) 
+       
+     
+# ggsave("Chart FBdecline vs TBTI.png", width=6, height=6, dpi=300)
+@
+
+\section{Potential Impact of Revised TB  TI on Foreign-Born TB}
+
+The year shown in the previous chart and table reflects the year of arrival.  However, the year of arrival is typically one-year after the initial diagnosis.  Had these case not been identified and treated prior to arrical, most would likely have been reported as cases in the year thay they intended to arrive in the US (the year before their actual arrival).  To facilitate a comparison with the foreign-born cases, we shifted the dates of the number diagnosed by panel physicians to one-year prior to their arrival in the United States.
+
+<<'panel-rx'>>=
+
+# Shift year of panel treat to previous year -- the year they would have arrived
+i = 2:(length(data$Year))
+data$TBTI_ul = rep(0, length(data$Year))
+data$TBTI_ll = rep(0, length(data$Year))
+data$TBTI = rep(0, length(data$Year))
+data[i-1,]$TBTI = data[i,]$TotalPanelRx - data[i,]$SmearPos
+data[i-1,]$TBTI_ll = data[i,]$SmearNegCulturePos
+data[i-1,]$TBTI_ul = data[i,]$TotalPanelRx
+
+# impute value for most recent year (year before current year) by weighting up to 12 months
+currentyear = as.numeric(format(Sys.Date(), "%Y"))-1
+currentmonth = as.numeric(format(Sys.Date(), "%m"))
+data[data$Year==currentyear, ]$TBTI = (12/ (currentmonth-1))*data[data$Year==currentyear, ]$TBTI
+data[data$Year==currentyear, ]$TBTI_ll =(12/ (currentmonth-1))*data[data$Year==currentyear, ]$TBTI_ll
+data[data$Year==currentyear, ]$TBTI_ul =(12/ (currentmonth-1))*data[data$Year==currentyear, ]$TBTI_ul
+
+# save(data, file = "data.RData")
+@
+
+\section{Summary}
+
+Here we show a chart of the increasing (most probable number of) TB cases directly diagnosed and treated as a result of the revised, culture and treat, TB technical instructions, compared with the increasing decline in US foreign-born TB cases from 2007 through 2011.  
+
+In the five years leading up to implementation of the revised, culture and DOT, TB TI, there was little change in the number of foreign-born cases of TB.  Begining in 2008, the numbers declined each year relative to the baseline of 2002-2006.  At the same time, the number of TB cases identified and treated overseas increased. The magnitude and timing of the increasing number of cases diagnosed overseas is coincident with the timing and magnitude of the decline in foregin-born cases in the United States.
+
+
+<<'final', warning=FALSE>>=
+# chart_title = "Comparison of Number of TB Cases 
+# \nPrevented through Revised Overseas TB Screening
+# \nWith the Decline in Reported Foreign-Born Cases"
+# 
+# # re-label
+# TBTI_categories = c("Increased Overseas TB Treatment (most probable)", 
+#                     "Culture pos, smear negative TB cases",
+#                     "All TB cases treated by Panel Physicians",
+#                     "Decline in Foreign-born TB")
+# levels(data.melt$TB) = TBTI_categories
+# 
+# data.melt = data.melt[data.melt$TB=="Decline in Foreign-born TB" | 
+#                       data.melt$TB=="Increased Overseas TB Treatment (most probable)",]
+
+# dirt = data.melt[data.melt$TB=="Decline in Foreign-born TB" , "value"]
+# TBTI =  data.melt[data.melt$TB=="Increased Overseas TB Treatment (most probable)", "value"]
+
+# plot only dirt and most probable 
+ggplot(data=data) + 
+     geom_point(aes(y=dirt, x=Year), color="black", size=4) + 
+     geom_line(aes(y=dirt, x=Year), color="black", size=1) +
+     geom_point(aes(y=TBTI, x=Year), color="blue", size=4) + 
+     geom_line(aes(y=TBTI, x=Year), color="blue", size=1, lty=2) +
+     ylab("TB Cases") +
+     theme_bw() +
+     ggtitle(chart_title) +
+     scale_x_continuous(limits=c(2002,2011), breaks=seq(1,2020,1)) +
+     scale_y_continuous(breaks=seq(-500,1500,250)) +
+     theme(legend.justification=c(0,0), legend.position=c(0.05,0.65), 
+           legend.text = element_text(face="bold", colour="black", size=8)) 
+@
+
+
+\section{Limitations and Interpretation}
+
+Interpretation of the chart comparing the increasing number of cases diagnosed overseas should be done with caution.  The coincidental relationship between the increasing number of cases treated overseas and the decresasing number of foreign-born cases does not indicate causality.  While a strong relationship may exist between the two, the decline in foreign-born cases is likely multifactorial. There may have been several factors that reduced the number ofr foreign-born cases in concert with factors that potentially increased the number of foreign-born cases.  The net change is unlikely the result of a single factor and therefore it is not reasonable to assume that entire decline is attributable to Regardless of the other factors, it is clear that a large number of newly arriving immigrants and refugees with TB were treated before arrival.  Thus, implementation of the revised TB TI should be considered as an important factor in the decreased number of foreigh-born TB. As a percentage of the number of foreighn-born cases (2011), the number treated overseas as a result of the revised TB TI is \Sexpr{round(100*(data$TotalPanelRx[data$Year==2012]-data$SmearPos[data$Year==2012])/(data$Foreign.born.TB[data$Year==2011]),1)}\%.  
+
+As a result of TB elimination efforts in the United States, there has been a gradual decline in the number of foreign born cases.  The sharp decline in foreign-born cases over relatively few years has been modeled as as a change in the slope of the foreign-born rate.  (see DTBE MMWR).  Alternatively, the decline could be veiwed as a single event, whereby the total number of froeign-born cases is removed, and there is no significant change to the slope of the rate from that time-period forward.
+
+As implementation of the revised TB TI nears completion, the expected number of cases prevented will rise.  Based on reveiw of data from countries still using the original TB TI, we expect approximately 10\% more cases prevented.  
+
+\end{document}
